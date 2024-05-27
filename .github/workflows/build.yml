@@ -31,7 +31,3 @@ jobs:
           files: |
             swarm-macvlan-linux-amd64
             swarm-macvlan-linux-arm64
-            ollama-discord-win-amd64.exe
-            ollama-discord-win-arm64.exe
-            ollama-discord-macos-amd64
-            ollama-discord-macos-arm64
