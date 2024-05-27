@@ -1,0 +1,37 @@
+name: Docker Build
+on:
+  push:
+    tags:
+      - "v*"
+jobs:
+  build:
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git Clone
+        uses: actions/checkout@v4
+
+      - name: Create build files
+        run: |
+          docker run --rm \
+          -v $(pwd):/mnt/ -w /mnt/ \
+          -t golang bash -c '
+          git config --global --add safe.directory "*"
+          export CGO_ENABLED=0
+          export GOOS=linux
+          export GOARCH=amd64
+          go build -ldflags="-s -w" -o swarm-macvlan-linux-amd64
+          export GOARCH=arm64
+          go build -ldflags="-s -w" -o swarm-macvlan-linux-arm64'
+
+      - name: Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            swarm-macvlan-linux-amd64
+            swarm-macvlan-linux-arm64
+            ollama-discord-win-amd64.exe
+            ollama-discord-win-arm64.exe
+            ollama-discord-macos-amd64
+            ollama-discord-macos-arm64
