@@ -57,6 +57,11 @@ func update(services []any) {
 			panic(err)
 		}
 		id := string(output)
+		l := 12
+		if len(id) < l {
+			continue
+		}
+		id = id[:l]
 		cmd = exec.Command("docker", "network", "inspect", network)
 		cmdPrint(cmd.Args)
 		output, err = cmd.CombinedOutput()
@@ -68,8 +73,6 @@ func update(services []any) {
 		if err != nil {
 			panic(err)
 		}
-		l := 12
-		id = id[:l]
 		containers := data.([]any)[0].(map[string]any)["Containers"].(map[string]any)
 		var found bool
 		for k, v := range containers {
