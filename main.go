@@ -76,7 +76,7 @@ func update(services []any) {
 		containers := data.([]any)[0].(map[string]any)["Containers"].(map[string]any)
 		var found bool
 		for k, v := range containers {
-			if k[:l] == id {
+			if strings.Contains(k, id) {
 				found = true
 				currentIP := v.(map[string]any)["IPv4Address"].(string)
 				if !strings.Contains(currentIP, ip) {
