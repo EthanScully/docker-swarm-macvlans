@@ -39,7 +39,7 @@ func main() {
 	<-inter
 }
 func update(services []any) {
-	go func() {
+	defer func() {
 		r := recover()
 		if r != nil {
 			fmt.Printf("panic: %v\n", r)
