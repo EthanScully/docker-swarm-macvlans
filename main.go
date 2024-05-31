@@ -86,21 +86,25 @@ func changeIPs(cli *client.Client, ctx context.Context) (err error) {
 						fmt.Printf("error disconnecting from network: %v\n", err)
 						break
 					}
-					err = cli.NetworkConnect(ctx, networkID, containerID, &network.EndpointSettings{IPAMConfig: &network.EndpointIPAMConfig{IPv4Address: IP}})
-					if err != nil {
-						fmt.Printf("error connecting to network: %v\n", err)
-						break
-					}
-					fmt.Printf("Changing service: %v to %v\n",service.Spec.Annotations.Name, IP)
+					go func(ctx context.Context, networkID, containerID, IP string) {
+						for {
+							err = cli.NetworkConnect(ctx, networkID, containerID, &network.EndpointSettings{IPAMConfig: &network.EndpointIPAMConfig{IPv4Address: IP}})
+							if err == nil {
+								break
+							}
+							fmt.Printf("error connecting to network: %v\n", err)
+							time.Sleep(time.Second)
+						}
+					}(ctx, networkID, containerID, IP)
+					fmt.Printf("Changing service: %v to %v\n", service.Spec.Annotations.Name, IP)
 				}
-				break 
+				break
 			}
 			break
 		}
 	}
 	return
 }
-
 func containsAlias(networks []swarm.NetworkAttachmentConfig) (networkID, IP string) {
 	for _, network := range networks {
 		for _, alias := range network.Aliases {
