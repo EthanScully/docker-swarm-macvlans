@@ -1,4 +1,4 @@
-Solution to static macvlan IPs in Docker swarm
+Solution to use static macvlan IPs in Docker swarm
 
 I have not tested this in a multi node swarp yet, so don't expect it to work perfectly
 
