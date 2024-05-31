@@ -1,117 +1,127 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
-	"gopkg.in/yaml.v3"
+	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/swarm"
+	"github.com/docker/docker/client"
 )
 
 func main() {
-	config := "config.yaml"
-	if len(os.Args) > 1 {
-		config = os.Args[1]
-	}
-	configFile, err := os.ReadFile(config)
+	ctx := context.Background()
+	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		panic(err)
+		panic(fmt.Errorf("error connecting to docker socket: %v", err))
 	}
-	var data any
-	err = yaml.Unmarshal(configFile, &data)
-	if err != nil {
-		panic(err)
-	}
-	services := data.([]any)
 	go func() {
 		for {
-			update(services)
-			time.Sleep(time.Second * 15)
+			err := changeIPs(cli, ctx)
+			if err != nil {
+				fmt.Println(err)
+			}
+			time.Sleep(15 * time.Second)
 		}
 	}()
 	inter := make(chan os.Signal, 1)
 	signal.Notify(inter, os.Interrupt, syscall.SIGTERM)
 	<-inter
 }
-func update(services []any) {
+func changeIPs(cli *client.Client, ctx context.Context) (err error) {
 	defer func() {
-		r := recover()
-		if r != nil {
-			fmt.Printf("panic: %v\n", r)
+		if r := recover(); r != nil {
+			err = r.(error)
 		}
 	}()
+	services, err := cli.ServiceList(ctx, types.ServiceListOptions{})
+	if err != nil {
+		return fmt.Errorf("error getting services: %v", err)
+	}
 	for _, service := range services {
-		network := service.(map[string]any)["net"].(string)
-		name := service.(map[string]any)["name"].(string)
-		ip := service.(map[string]any)["ip"].(string)
-		cmd := exec.Command("docker", "container", "ls", "-q", "-f", fmt.Sprintf("name=%s", name))
-		cmdPrint(cmd.Args)
-		output, err := cmd.CombinedOutput()
-		fmt.Println(string(output))
-		if err != nil {
-			panic(err)
-		}
-		id := string(output)
-		l := 12
-		if len(id) < l {
+		networkID, IP := containsAlias(service.Spec.TaskTemplate.Networks)
+		if IP == "" || networkID == "" {
 			continue
 		}
-		id = id[:l]
-		cmd = exec.Command("docker", "network", "inspect", network)
-		cmdPrint(cmd.Args)
-		output, err = cmd.CombinedOutput()
+		tasks, err := cli.TaskList(ctx, types.TaskListOptions{})
 		if err != nil {
-			panic(err)
+			fmt.Printf("error getting tasks: %v\n", err)
+			break
 		}
-		var data any
-		err = json.Unmarshal(output, &data)
-		if err != nil {
-			panic(err)
-		}
-		containers := data.([]any)[0].(map[string]any)["Containers"].(map[string]any)
-		var found bool
-		for k, v := range containers {
-			if strings.Contains(k, id) {
-				found = true
-				currentIP := v.(map[string]any)["IPv4Address"].(string)
-				if !strings.Contains(currentIP, ip) {
-					cmd = exec.Command("docker", "network", "disconnect", network, id)
-					cmdPrint(cmd.Args)
-					output, err = cmd.CombinedOutput()
-					fmt.Println(string(output))
-					if err != nil {
-						panic(err)
-					}
-					cmd = exec.Command("docker", "network", "connect", "--ip", ip, network, id)
-					cmdPrint(cmd.Args)
-					output, err = cmd.CombinedOutput()
-					fmt.Println(string(output))
-					if err != nil {
-						panic(err)
-					}
-				}
+		for _, task := range tasks {
+			if task.ServiceID != service.ID {
+				continue
 			}
-		}
-		if !found {
-			cmd = exec.Command("docker", "network", "connect", "--ip", ip, network, id)
-			cmdPrint(cmd.Args)
-			output, err = cmd.CombinedOutput()
-			fmt.Println(string(output))
+			if task.Status.State != swarm.TaskStateRunning {
+				continue
+			}
+			_, taskInspect, err := cli.TaskInspectWithRaw(ctx, task.ID)
 			if err != nil {
-				panic(err)
+				fmt.Printf("error inspecting task: %v\n", err)
+				break
+			}
+			containerID, err := parseContainerID(taskInspect)
+			if err != nil {
+				fmt.Printf("error getting containerID: %v\n", err)
+				break
+			}
+			container, err := cli.ContainerInspect(ctx, containerID)
+			if err != nil {
+				fmt.Printf("error inspecting container: %v\n", err)
+			}
+			for _, info := range container.NetworkSettings.Networks {
+				if info.NetworkID != networkID {
+					continue
+				}
+				if info.IPAddress != IP {
+					err := cli.NetworkDisconnect(ctx, networkID, containerID, false)
+					if err != nil {
+						fmt.Printf("error disconnecting from network: %v\n", err)
+						break
+					}
+					err = cli.NetworkConnect(ctx, networkID, containerID, &network.EndpointSettings{IPAMConfig: &network.EndpointIPAMConfig{IPv4Address: IP}})
+					if err != nil {
+						fmt.Printf("error connecting to network: %v\n", err)
+						break
+					}
+					fmt.Printf("Changing service: %v to %v\n",service.Spec.Annotations.Name, IP)
+				}
+				break 
+			}
+			break
+		}
+	}
+	return
+}
+
+func containsAlias(networks []swarm.NetworkAttachmentConfig) (networkID, IP string) {
+	for _, network := range networks {
+		for _, alias := range network.Aliases {
+			if strings.Count(alias, ".") == 3 {
+				return network.Target, alias
 			}
 		}
 	}
+	return
 }
-func cmdPrint(cmd []string) {
-	list := make([]any, len(cmd))
-	for i, c := range cmd {
-		list[i] = c
+func parseContainerID(taskInspect []byte) (containerID string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic: %v", r)
+		}
+	}()
+	var parsed any
+	err = json.Unmarshal(taskInspect, &parsed)
+	if err != nil {
+		return "", fmt.Errorf("json Unmarshal Error: %v", err)
 	}
-	fmt.Println(list...)
+	containerID = parsed.(map[string]any)["Status"].(map[string]any)["ContainerStatus"].(map[string]any)["ContainerID"].(string)
+	return
 }
