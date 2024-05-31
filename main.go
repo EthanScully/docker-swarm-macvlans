@@ -87,9 +87,10 @@ func changeIPs(cli *client.Client, ctx context.Context) (err error) {
 						break
 					}
 					go func(ctx context.Context, networkID, containerID, IP string) {
+						var retry int
 						for {
 							err = cli.NetworkConnect(ctx, networkID, containerID, &network.EndpointSettings{IPAMConfig: &network.EndpointIPAMConfig{IPv4Address: IP}})
-							if err == nil {
+							if err == nil  || retry > 60 {
 								break
 							}
 							fmt.Printf("error connecting to network: %v\n", err)
