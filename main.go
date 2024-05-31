@@ -75,6 +75,7 @@ func changeIPs(cli *client.Client, ctx context.Context) (err error) {
 			container, err := cli.ContainerInspect(ctx, containerID)
 			if err != nil {
 				fmt.Printf("error inspecting container: %v\n", err)
+				break
 			}
 			for _, info := range container.NetworkSettings.Networks {
 				if info.NetworkID != networkID {
