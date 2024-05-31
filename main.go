@@ -86,18 +86,12 @@ func changeIPs(cli *client.Client, ctx context.Context) (err error) {
 						fmt.Printf("error disconnecting from network: %v\n", err)
 						break
 					}
-					go func(ctx context.Context, networkID, containerID, IP string) {
-						var retry int
-						for {
-							err = cli.NetworkConnect(ctx, networkID, containerID, &network.EndpointSettings{IPAMConfig: &network.EndpointIPAMConfig{IPv4Address: IP}})
-							if err == nil  || retry > 60 {
-								break
-							}
-							fmt.Printf("error connecting to network: %v\n", err)
-							time.Sleep(time.Second)
-							retry++
-						}
-					}(ctx, networkID, containerID, IP)
+					err = cli.NetworkConnect(ctx, networkID, containerID, &network.EndpointSettings{IPAMConfig: &network.EndpointIPAMConfig{IPv4Address: IP}})
+					if err != nil {
+						fmt.Printf("error connecting to network: %v, using random IP\n", err)
+						cli.NetworkConnect(ctx, networkID, containerID, &network.EndpointSettings{})
+						break
+					}
 					fmt.Printf("Changing service: %v to %v\n", service.Spec.Annotations.Name, IP)
 				}
 				break
