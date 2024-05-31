@@ -95,6 +95,7 @@ func changeIPs(cli *client.Client, ctx context.Context) (err error) {
 							}
 							fmt.Printf("error connecting to network: %v\n", err)
 							time.Sleep(time.Second)
+							retry++
 						}
 					}(ctx, networkID, containerID, IP)
 					fmt.Printf("Changing service: %v to %v\n", service.Spec.Annotations.Name, IP)
