@@ -30,6 +30,6 @@ services:
 ```
 To set up the network for example:
 ```SHELL
-docker network create --config-only --subnet 192.168.1.0/24 --gateway 192.168.1.1 --ip-range 192.168.1.0/24 -o parent=eno1 external-config
+docker network create --config-only --subnet 192.168.1.0/24 --gateway 192.168.1.1 -o parent=eno1 external-config
 docker network create -d macvlan --scope=swarm --config-from external-config external-net
 ```
