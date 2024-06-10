@@ -51,7 +51,7 @@ func main() {
 func changeIPs(cli *client.Client, ctx context.Context) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = r.(error)
+			err = fmt.Errorf("%v", r)
 		}
 	}()
 	services, err := cli.ServiceList(ctx, types.ServiceListOptions{})
