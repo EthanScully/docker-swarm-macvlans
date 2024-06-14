@@ -23,6 +23,7 @@ func main() {
 	if err != nil {
 		panic(fmt.Errorf("error connecting to docker socket: %v", err))
 	}
+	defer cli.Close()
 	repeat := 15
 	if len(os.Args) > 1 {
 		repeat, err = strconv.Atoi(os.Args[1])
@@ -43,10 +44,6 @@ func main() {
 	inter := make(chan os.Signal, 1)
 	signal.Notify(inter, os.Interrupt, syscall.SIGTERM)
 	<-inter
-	err = cli.Close()
-	if err != nil {
-		panic(fmt.Errorf("error closing docker socket: %v", err))
-	}
 }
 func changeIPs(cli *client.Client, ctx context.Context) (err error) {
 	defer func() {
