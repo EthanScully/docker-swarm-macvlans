@@ -2,7 +2,7 @@ module swarm-macvlans
 
 go 1.22
 
-require github.com/docker/docker v26.1.4+incompatible
+require github.com/docker/docker v27.0.0+incompatible
 
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20230124172434-306776ec8161 // indirect
