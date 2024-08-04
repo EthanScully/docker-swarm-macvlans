@@ -74,17 +74,17 @@ func changeIPs(cli *client.Client, ctx context.Context) (err error) {
 	if err != nil {
 		return fmt.Errorf("error getting container list: %v", err)
 	}
+	srvs := make(map[string]string)
 	for _, container := range containers {
 		for _, name := range container.Names {
 			for service, network := range services {
 				if strings.Contains(name, service) {
-					delete(services, service)
-					services[container.ID] = network
+					srvs[container.ID] = network
 				}
 			}
 		}
 	}
-	for containerID, networkIP := range services {
+	for containerID, networkIP := range srvs {
 		// Get Container object
 		container, err := cli.ContainerInspect(ctx, containerID)
 		if err != nil {
