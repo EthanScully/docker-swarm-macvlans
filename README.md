@@ -24,6 +24,9 @@ services:
     image: ethanscully/macvlan
     deploy:
       mode: global
+      placement:
+        constraints:
+          - node.role == manager
     volumes: 
       - /var/run/docker.sock:/var/run/docker.sock
 
